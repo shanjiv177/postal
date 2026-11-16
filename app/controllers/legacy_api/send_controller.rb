@@ -101,8 +101,8 @@ module LegacyAPI
 
       # Parse through mail to get the from/sender headers
       mail = Mail.new(raw_message.split("\r\n\r\n", 2).first)
-      from_headers = { "from" => mail.from, "sender" => mail.sender }
-      authenticated_domain = @current_credential.server.find_authenticated_domain_from_headers(from_headers)
+      authorizer = SenderAuthorizer.new(server: @current_credential.server, credential: @current_credential)
+      authenticated_domain, = authorizer.authorize(from: mail.from, sender: mail.sender)
 
       # If we're not authenticated, don't continue
       if authenticated_domain.nil?
