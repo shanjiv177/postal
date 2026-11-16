@@ -49,10 +49,7 @@ class OutgoingMessagePrototype
   end
 
   def find_domain
-    domain = @server.authenticated_domain_for_address(@from)
-    if @server.allow_sender? && domain.nil?
-      domain = @server.authenticated_domain_for_address(@sender)
-    end
+    domain, = SenderAuthorizer.new(server: @server, credential: credential).authorize(from: @from, sender: @sender)
     domain || :none
   end
 
