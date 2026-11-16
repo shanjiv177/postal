@@ -144,6 +144,26 @@ RSpec.describe "Legacy Send API", type: :request do
             expect(parsed_body["data"]["code"]).to eq "UnauthenticatedFromAddress"
             expect(parsed_body["data"]["message"]).to match(/the from address is not authorised to send mail from this server/i)
           end
+
+          context "when the 'Sender' address is authorised and the server allows the Sender header" do
+            let(:server) { create(:server, allow_sender: true) }
+
+            it "returns success" do
+              parsed_body = JSON.parse(response.body)
+              expect(parsed_body["status"]).to eq "success"
+            end
+          end
+
+          context "when the 'Sender' address is not authorised and the server allows the Sender header" do
+            let(:server) { create(:server, allow_sender: true) }
+            let(:params) { default_params.merge(from: "test@another.com", sender: "sender@another.com") }
+
+            it "returns an error" do
+              parsed_body = JSON.parse(response.body)
+              expect(parsed_body["status"]).to eq "error"
+              expect(parsed_body["data"]["code"]).to eq "UnauthenticatedFromAddress"
+            end
+          end
         end
 
         context "when an attachment is missing a name" do
