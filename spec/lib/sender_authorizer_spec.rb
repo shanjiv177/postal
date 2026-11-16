@@ -60,6 +60,64 @@ describe SenderAuthorizer do
       end
     end
 
+    context "when a single header value contains several addresses" do
+      let!(:domain) { create(:domain, owner: server) }
+
+      it "rejects the message if any address is not authenticated" do
+        [
+          "<someone@unverified.example>, <hello@#{domain.name}>",
+          "Eve <someone@unverified.example>, Me <hello@#{domain.name}>",
+          "hello@#{domain.name}, someone@unverified.example",
+        ].each do |from|
+          expect(authorizer.authorize(from: from, sender: nil)).to eq([nil, :unauthenticated_domain]), from
+        end
+      end
+
+      it "accepts the message if every address is authenticated" do
+        other_domain = create(:domain, owner: server)
+        result = authorizer.authorize(from: "A <a@#{domain.name}>, B <b@#{other_domain.name}>", sender: nil)
+        expect(result).to eq [domain, nil]
+      end
+
+      context "when the server is allowed to use the sender header" do
+        let(:server) { create(:server, allow_sender: true) }
+
+        it "rejects the message if any sender address is not authenticated" do
+          result = authorizer.authorize(from: "someone@unverified.example",
+                                        sender: "<someone@unverified.example>, <hello@#{domain.name}>")
+          expect(result).to eq [nil, :unauthenticated_domain]
+        end
+      end
+    end
+
+    context "when parsing addresses" do
+      let!(:domain) { create(:domain, owner: server) }
+
+      it "accepts formats that are valid today" do
+        [
+          "hello@#{domain.name}",
+          "Hello <hello@#{domain.name}>",
+          "\"Smith, John\" <hello@#{domain.name}>",
+          "Smith, John <hello@#{domain.name}>",
+          "=?UTF-8?B?w4lyaWM=?= <hello@#{domain.name}>",
+          "hello@#{domain.name} (Hello)",
+          "Ériç <hello@#{domain.name}>".b,
+          "\xC9ric <hello@#{domain.name}>".b, # Latin-1, which is not valid UTF-8
+        ].each do |from|
+          expect(authorizer.authorize(from: from, sender: nil)).to eq([domain, nil]), from.inspect
+        end
+      end
+
+      it "rejects a header with no addresses" do
+        expect(authorizer.authorize(from: "undisclosed-recipients:;", sender: nil)).to eq [nil, :unauthenticated_domain]
+        expect(authorizer.authorize(from: "Smith", sender: nil)).to eq [nil, :unauthenticated_domain]
+      end
+
+      it "rejects a header that cannot be parsed" do
+        expect(authorizer.authorize(from: "<<hello@#{domain.name}", sender: nil)).to eq [nil, :unauthenticated_domain]
+      end
+    end
+
     context "when the server has a domain that can be used for any address" do
       it "returns that domain for any from address" do
         domain = create(:domain, owner: server, use_for_any: true)

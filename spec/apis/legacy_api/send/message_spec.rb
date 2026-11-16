@@ -145,6 +145,16 @@ RSpec.describe "Legacy Send API", type: :request do
             expect(parsed_body["data"]["message"]).to match(/the from address is not authorised to send mail from this server/i)
           end
 
+          context "when the 'From' value has several addresses and only the last is authorised" do
+            let(:params) { default_params.merge(from: "Eve <test@another.com>, Me <test@#{domain.name}>") }
+
+            it "returns an error" do
+              parsed_body = JSON.parse(response.body)
+              expect(parsed_body["status"]).to eq "error"
+              expect(parsed_body["data"]["code"]).to eq "UnauthenticatedFromAddress"
+            end
+          end
+
           context "when the 'Sender' address is authorised and the server allows the Sender header" do
             let(:server) { create(:server, allow_sender: true) }
 

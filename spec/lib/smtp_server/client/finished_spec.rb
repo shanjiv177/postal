@@ -122,6 +122,13 @@ module SMTPServer
           end
         end
 
+        context "when the From header has several addresses and one is not authenticated" do
+          it "rejects the message" do
+            result = send_message_with_headers("From: Eve <someone@unverified.example>, Me <test@#{domain.name}>")
+            expect(result).to eq "530 From/Sender name is not valid"
+          end
+        end
+
         context "when there is no From header" do
           it "rejects the message" do
             expect(send_message_with_headers).to eq "530 From/Sender name is not valid"

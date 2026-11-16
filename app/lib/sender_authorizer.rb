@@ -16,6 +16,10 @@ class SenderAuthorizer
     @credential = credential
   end
 
+  # Every address in the From header must belong to a domain that the server
+  # can send from. If not, and the server allows it, every address in the
+  # Sender header must instead.
+  #
   # @param from [String, Array<String>, nil] the From header value(s)
   # @param sender [String, Array<String>, nil] the Sender header value(s)
   # @return [Array(Domain, nil), Array(nil, Symbol)] the domain to authenticate
@@ -25,14 +29,38 @@ class SenderAuthorizer
     headers << sender if @server.allow_sender?
 
     headers.each do |header|
-      values = header.is_a?(Array) ? header : [header.to_s]
-      domains = values.map { |value| @server.authenticated_domain_for_address(value) }.compact
-      next unless domains.size == values.size
+      addresses = addresses_from(header)
+      next if addresses.empty?
 
-      return domains.first ? [domains.first, nil] : [nil, :unauthenticated_domain]
+      domains = addresses.map { |address| @server.authenticated_domain_for_address(address) }
+      next if domains.include?(nil)
+
+      return [domains.first, nil]
     end
 
     [nil, :unauthenticated_domain]
+  end
+
+  private
+
+  # Extract every e-mail address from a header. A single header value can
+  # hold several addresses (e.g. "A <a@x.com>, B <b@y.com>"), so each value is
+  # parsed as an address list rather than as one address.
+  #
+  # Entries with no domain are ignored. They come from display names with an
+  # unquoted comma ("Smith, John <john@x.com>" gives "Smith" and
+  # "john@x.com") and can't claim to be from any domain.
+  #
+  # @param header [String, Array<String>, nil]
+  # @return [Array<String>] the addresses, or an empty array if there are none
+  #   or any value cannot be parsed
+  def addresses_from(header)
+    Array(header).flat_map do |value|
+      value = value.to_s.dup.force_encoding(Encoding::UTF_8).scrub
+      Mail::AddressList.new(value).addresses.select { |address| address.domain.present? }.map(&:address)
+    end
+  rescue Mail::Field::ParseError
+    []
   end
 
 end
