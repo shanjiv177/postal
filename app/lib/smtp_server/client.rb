@@ -479,10 +479,16 @@ module SMTPServer
       authenticated_domain = nil
       if @credential
         authorizer = SenderAuthorizer.new(server: @credential.server, credential: @credential)
-        authenticated_domain, = authorizer.authorize(from: @headers["from"], sender: @headers["sender"])
+        authenticated_domain, reason = authorizer.authorize(from: @headers["from"], sender: @headers["sender"])
         if authenticated_domain.nil?
           transaction_reset
           @state = :welcomed
+
+          if reason == :sender_not_permitted
+            increment_error_count("sender-not-permitted")
+            return "550 Sender address not permitted for this credential"
+          end
+
           increment_error_count("from-name-invalid")
           return "530 From/Sender name is not valid"
         end

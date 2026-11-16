@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_03_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_17_120000) do
   create_table "additional_route_endpoints", id: :integer, charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
     t.integer "route_id"
     t.string "endpoint_type"
@@ -72,6 +72,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_03_100000) do
     t.datetime "updated_at"
     t.boolean "hold", default: false
     t.string "uuid"
+    t.text "allowed_senders_text"
   end
 
   create_table "domains", id: :integer, charset: "utf8mb4", collation: "utf8mb4_general_ci", force: :cascade do |t|
