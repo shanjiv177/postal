@@ -17,17 +17,20 @@ class SenderAuthorizer
   end
 
   # Every address in the From header must belong to a domain that the server
-  # can send from. If not, and the server allows it, every address in the
-  # Sender header must instead.
+  # can send from and, if the credential is restricted, be one of the
+  # credential's allowed senders. If not, and the server allows it, every
+  # address in the Sender header must meet the same conditions instead.
   #
   # @param from [String, Array<String>, nil] the From header value(s)
   # @param sender [String, Array<String>, nil] the Sender header value(s)
   # @return [Array(Domain, nil), Array(nil, Symbol)] the domain to authenticate
-  #   the message with, or nil and the reason the sender was not authorised
+  #   the message with, or nil and the reason the sender was not authorised:
+  #   :unauthenticated_domain or :sender_not_permitted
   def authorize(from:, sender:)
     headers = [from]
     headers << sender if @server.allow_sender?
 
+    sender_not_permitted = false
     headers.each do |header|
       addresses = addresses_from(header)
       next if addresses.empty?
@@ -35,10 +38,15 @@ class SenderAuthorizer
       domains = addresses.map { |address| @server.authenticated_domain_for_address(address) }
       next if domains.include?(nil)
 
+      unless addresses.all? { |address| permitted_by_credential?(address) }
+        sender_not_permitted = true
+        next
+      end
+
       return [domains.first, nil]
     end
 
-    [nil, :unauthenticated_domain]
+    [nil, sender_not_permitted ? :sender_not_permitted : :unauthenticated_domain]
   end
 
   # Extract every e-mail address from a header. A single header value can
@@ -75,6 +83,12 @@ class SenderAuthorizer
 
   def addresses_from(header)
     self.class.addresses_in(header)
+  end
+
+  def permitted_by_credential?(address)
+    return true if @credential.nil? || !@credential.restricted_senders?
+
+    @credential.sender_allowed?(address)
   end
 
 end

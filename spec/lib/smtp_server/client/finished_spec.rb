@@ -129,6 +129,36 @@ module SMTPServer
           end
         end
 
+        context "when the credential is restricted to specific senders" do
+          let(:credential) { create(:credential, server: server, type: "SMTP", allowed_senders_text: "alice@#{domain.name}") }
+
+          it "accepts a message from an allowed address" do
+            expect(send_message_with_headers("From: Alice <alice@#{domain.name}>")).to eq "250 OK"
+            message = server.message(QueuedMessage.first.message_id)
+            expect(message).to have_attributes(credential_id: credential.id, domain_id: domain.id)
+          end
+
+          it "rejects a message from any other address and resets the state" do
+            result = send_message_with_headers("From: Bob <bob@#{domain.name}>")
+            expect(result).to eq "550 Sender address not permitted for this credential"
+            expect(QueuedMessage.count).to eq 0
+            expect(client.handle("DATA")).to eq "503 HELO/EHLO, MAIL FROM and RCPT TO before sending data"
+          end
+
+          context "when the credential is an SMTP-IP credential" do
+            let(:auth_plain) { nil }
+
+            it "applies the restriction" do
+              create(:credential, server: server, type: "SMTP-IP", key: ip_address, allowed_senders_text: "alice@#{domain.name}")
+              client.handle("MAIL FROM: #{mail_from}")
+              expect(client.handle("RCPT TO: #{rcpt_to}")).to eq "250 OK"
+
+              result = send_message_with_headers("From: bob@#{domain.name}")
+              expect(result).to eq "550 Sender address not permitted for this credential"
+            end
+          end
+        end
+
         context "when there is no From header" do
           it "rejects the message" do
             expect(send_message_with_headers).to eq "530 From/Sender name is not valid"

@@ -51,7 +51,7 @@ class OutgoingMessagePrototype
   end
 
   def find_domain
-    domain, = SenderAuthorizer.new(server: @server, credential: credential).authorize(from: @from, sender: @sender)
+    domain, @sender_error = SenderAuthorizer.new(server: @server, credential: credential).authorize(from: @from, sender: @sender)
     domain || :none
   end
 
@@ -132,7 +132,7 @@ class OutgoingMessagePrototype
     end
 
     if domain.nil?
-      @errors << "UnauthenticatedFromAddress"
+      @errors << (@sender_error == :sender_not_permitted ? "SenderNotPermittedForCredential" : "UnauthenticatedFromAddress")
     end
 
     if attachments.present?
