@@ -164,6 +164,33 @@ RSpec.describe "Legacy Send API", type: :request do
         end
       end
 
+      context "when the credential is restricted to specific senders" do
+        let(:credential) { create(:credential, server: server, allowed_senders_text: "test@#{domain.name}") }
+
+        it "accepts a message from an allowed address" do
+          parsed_body = JSON.parse(response.body)
+          expect(parsed_body["status"]).to eq "success"
+        end
+
+        context "when the From address is not allowed" do
+          let(:data) do
+            mail = Mail.new
+            mail.to = "test1@example.com"
+            mail.from = "other@#{domain.name}"
+            mail.subject = "test"
+            mail.body = "plain text"
+            mail
+          end
+
+          it "returns an error" do
+            parsed_body = JSON.parse(response.body)
+            expect(parsed_body["status"]).to eq "error"
+            expect(parsed_body["data"]["code"]).to eq "SenderNotPermittedForCredential"
+            expect(parsed_body["data"]["message"]).to match(/not permitted for this credential/i)
+          end
+        end
+      end
+
       context "when the From address is not authenticated" do
         let(:data) do
           mail = Mail.new

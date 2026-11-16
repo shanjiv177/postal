@@ -4,17 +4,18 @@
 #
 # Table name: credentials
 #
-#  id           :integer          not null, primary key
-#  hold         :boolean          default(FALSE)
-#  key          :string(255)
-#  last_used_at :datetime
-#  name         :string(255)
-#  options      :text(65535)
-#  type         :string(255)
-#  uuid         :string(255)
-#  created_at   :datetime
-#  updated_at   :datetime
-#  server_id    :integer
+#  id                   :integer          not null, primary key
+#  allowed_senders_text :text(65535)
+#  hold                 :boolean          default(FALSE)
+#  key                  :string(255)
+#  last_used_at         :datetime
+#  name                 :string(255)
+#  options              :text(65535)
+#  type                 :string(255)
+#  uuid                 :string(255)
+#  created_at           :datetime
+#  updated_at           :datetime
+#  server_id            :integer
 #
 FactoryBot.define do
   factory :credential do
