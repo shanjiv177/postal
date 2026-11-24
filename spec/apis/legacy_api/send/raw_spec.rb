@@ -196,6 +196,53 @@ RSpec.describe "Legacy Send API", type: :request do
           end
         end
 
+        context "when there is a second From header with an authenticated address" do
+          let(:data) do
+            "From: someone@unverified.example\r\n" \
+              "From: test@#{domain.name}\r\n" \
+              "To: test1@example.com\r\n" \
+              "Subject: test\r\n" \
+              "\r\n" \
+              "plain text\r\n"
+          end
+
+          it "returns an error" do
+            parsed_body = JSON.parse(response.body)
+            expect(parsed_body["data"]["code"]).to eq "UnauthenticatedFromAddress"
+          end
+        end
+
+        context "when the From header is folded over several lines" do
+          let(:data) do
+            "From: Me <test@#{domain.name}>,\r\n  " \
+              "Eve <someone@unverified.example>\r\n" \
+              "To: test1@example.com\r\n" \
+              "Subject: test\r\n" \
+              "\r\n" \
+              "plain text\r\n"
+          end
+
+          it "checks the folded addresses too" do
+            parsed_body = JSON.parse(response.body)
+            expect(parsed_body["data"]["code"]).to eq "UnauthenticatedFromAddress"
+          end
+        end
+
+        context "when the message uses bare LF line endings" do
+          let(:data) do
+            "From: someone@unverified.example\n" \
+              "To: test1@example.com\n" \
+              "Subject: test\n" \
+              "\n" \
+              "From: test@#{domain.name}\n"
+          end
+
+          it "does not read headers from the body" do
+            parsed_body = JSON.parse(response.body)
+            expect(parsed_body["data"]["code"]).to eq "UnauthenticatedFromAddress"
+          end
+        end
+
         context "when the Sender address is authenticated" do
           let(:data) do
             mail = Mail.new

@@ -33,8 +33,10 @@ class OutgoingMessagePrototype
 
   attr_reader :message_id
 
+  # The envelope sender for the message. `from` may contain several
+  # addresses, so use the first one rather than the whole value.
   def from_address
-    Postal::Helpers.strip_name_from_address(@from)
+    SenderAuthorizer.addresses_in(@from).first || Postal::Helpers.strip_name_from_address(@from)
   end
 
   def sender_address

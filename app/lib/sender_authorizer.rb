@@ -41,8 +41,6 @@ class SenderAuthorizer
     [nil, :unauthenticated_domain]
   end
 
-  private
-
   # Extract every e-mail address from a header. A single header value can
   # hold several addresses (e.g. "A <a@x.com>, B <b@y.com>"), so each value is
   # parsed as an address list rather than as one address.
@@ -51,16 +49,32 @@ class SenderAuthorizer
   # unquoted comma ("Smith, John <john@x.com>" gives "Smith" and
   # "john@x.com") and can't claim to be from any domain.
   #
+  # Some senders use display names that aren't valid RFC 5322, such as
+  # "Joe [Work] <joe@x.com>", which can't be parsed as an address list. A
+  # value like that with a single "@" can only hold one address, so it is read
+  # the lenient way Postal always has. One with several "@"s might hide an
+  # extra address, so nothing is returned and the header is rejected.
+  #
   # @param header [String, Array<String>, nil]
   # @return [Array<String>] the addresses, or an empty array if there are none
-  #   or any value cannot be parsed
-  def addresses_from(header)
+  #   or the header can't be read safely
+  def self.addresses_in(header)
     Array(header).flat_map do |value|
       value = value.to_s.dup.force_encoding(Encoding::UTF_8).scrub
-      Mail::AddressList.new(value).addresses.select { |address| address.domain.present? }.map(&:address)
+      begin
+        Mail::AddressList.new(value).addresses.select { |address| address.domain.present? }.map(&:address)
+      rescue Mail::Field::ParseError
+        return [] unless value.count("@") == 1
+
+        [Postal::Helpers.strip_name_from_address(value)]
+      end
     end
-  rescue Mail::Field::ParseError
-    []
+  end
+
+  private
+
+  def addresses_from(header)
+    self.class.addresses_in(header)
   end
 
 end

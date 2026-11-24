@@ -113,8 +113,34 @@ describe SenderAuthorizer do
         expect(authorizer.authorize(from: "Smith", sender: nil)).to eq [nil, :unauthenticated_domain]
       end
 
-      it "rejects a header that cannot be parsed" do
-        expect(authorizer.authorize(from: "<<hello@#{domain.name}", sender: nil)).to eq [nil, :unauthenticated_domain]
+      it "accepts a single address that cannot be parsed strictly, as before" do
+        [
+          "Joe [Work] <hello@#{domain.name}>",
+          "x <hello@#{domain.name}> y",
+          "<<hello@#{domain.name}",
+        ].each do |from|
+          expect(authorizer.authorize(from: from, sender: nil)).to eq([domain, nil]), from
+        end
+      end
+
+      it "rejects a header that cannot be parsed and has more than one address" do
+        [
+          "Joe [Work] <someone@unverified.example>, <hello@#{domain.name}>",
+          "<<someone@unverified.example>, <hello@#{domain.name}>",
+          "Joe [Work] <hello@#{domain.name}>, <hello2@#{domain.name}>",
+        ].each do |from|
+          expect(authorizer.authorize(from: from, sender: nil)).to eq([nil, :unauthenticated_domain]), from
+        end
+      end
+    end
+
+    describe ".addresses_in" do
+      it "returns every address in the header" do
+        expect(described_class.addresses_in(["A <a@x.com>, b@y.com", "Smith, John <j@z.com>"])).to eq ["a@x.com", "b@y.com", "j@z.com"]
+      end
+
+      it "returns nothing for a missing header" do
+        expect(described_class.addresses_in(nil)).to eq []
       end
     end
 

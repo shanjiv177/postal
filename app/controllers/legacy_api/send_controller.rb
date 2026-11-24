@@ -99,10 +99,12 @@ module LegacyAPI
       # Decode the raw message
       raw_message = Base64.decode64(api_params["data"])
 
-      # Parse through mail to get the from/sender headers
-      mail = Mail.new(raw_message.split("\r\n\r\n", 2).first)
+      # Read every From and Sender header. The mail gem keeps only the last of
+      # each, which would let an earlier From header go unchecked.
+      header_block = raw_message.split(/\r?\n\r?\n/, 2).first.to_s
       authorizer = SenderAuthorizer.new(server: @current_credential.server, credential: @current_credential)
-      authenticated_domain, = authorizer.authorize(from: mail.from, sender: mail.sender)
+      authenticated_domain, = authorizer.authorize(from: header_values(header_block, "from"),
+                                                   sender: header_values(header_block, "sender"))
 
       # If we're not authenticated, don't continue
       if authenticated_domain.nil?
@@ -129,6 +131,21 @@ module LegacyAPI
         end
       end
       render_success result
+    end
+
+    private
+
+    # Return the value of every header with the given name in a raw header
+    # block, unfolding any continuation lines.
+    #
+    # @param header_block [String]
+    # @param name [String] the header name, matched case-insensitively
+    # @return [Array<String>]
+    def header_values(header_block, name)
+      header_block.gsub(/\r?\n[ \t]+/, " ").split(/\r?\n/).filter_map do |line|
+        field_name, value = line.split(":", 2)
+        value&.strip if field_name.to_s.strip.casecmp?(name)
+      end
     end
 
   end
