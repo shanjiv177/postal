@@ -176,6 +176,26 @@ RSpec.describe "Legacy Send API", type: :request do
           end
         end
 
+        context "when the credential is restricted to specific senders" do
+          let(:credential) { create(:credential, server: server, allowed_senders_text: "test@#{domain.name}") }
+
+          it "accepts a message from an allowed address" do
+            parsed_body = JSON.parse(response.body)
+            expect(parsed_body["status"]).to eq "success"
+          end
+
+          context "when the 'From' address is not allowed" do
+            let(:params) { default_params.merge(from: "other@#{domain.name}") }
+
+            it "returns an error" do
+              parsed_body = JSON.parse(response.body)
+              expect(parsed_body["status"]).to eq "error"
+              expect(parsed_body["data"]["code"]).to eq "SenderNotPermittedForCredential"
+              expect(parsed_body["data"]["message"]).to match(/the from address is not permitted for this credential/i)
+            end
+          end
+        end
+
         context "when an attachment is missing a name" do
           let(:params) { default_params.merge(attachments: [{ name: nil, content_type: "text/plain", data: Base64.encode64("hello world 1") }]) }
 

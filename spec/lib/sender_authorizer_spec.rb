@@ -180,6 +180,92 @@ describe SenderAuthorizer do
       end
     end
 
+    context "when the credential is restricted to specific senders" do
+      let!(:domain) { create(:domain, owner: server) }
+      let(:credential) { create(:credential, server: server, allowed_senders_text: "alice@#{domain.name}") }
+
+      it "accepts an allowed address" do
+        expect(authorizer.authorize(from: "Alice <alice@#{domain.name}>", sender: nil)).to eq [domain, nil]
+      end
+
+      it "accepts an allowed address in a different case" do
+        expect(authorizer.authorize(from: "ALICE@#{domain.name.upcase}", sender: nil)).to eq [domain, nil]
+      end
+
+      it "rejects another address on the same domain" do
+        expect(authorizer.authorize(from: "bob@#{domain.name}", sender: nil)).to eq [nil, :sender_not_permitted]
+      end
+
+      it "rejects a tagged version of an allowed address" do
+        expect(authorizer.authorize(from: "alice+news@#{domain.name}", sender: nil)).to eq [nil, :sender_not_permitted]
+      end
+
+      it "rejects a From header where only some addresses are allowed" do
+        result = authorizer.authorize(from: "Bob <bob@#{domain.name}>, Alice <alice@#{domain.name}>", sender: nil)
+        expect(result).to eq [nil, :sender_not_permitted]
+      end
+
+      it "rejects a From header with extra entries that have no domain" do
+        [
+          "alice@#{domain.name}, =?UTF-8?B?Y2VvQGJhbmsuY29t?=",
+          "Smith, Alice <alice@#{domain.name}>",
+        ].each do |from|
+          expect(authorizer.authorize(from: from, sender: nil)).to eq([nil, :unauthenticated_domain]), from
+        end
+      end
+
+      it "still accepts a single allowed address with an unusual display name" do
+        expect(authorizer.authorize(from: "Alice [Support] <alice@#{domain.name}>", sender: nil)).to eq [domain, nil]
+      end
+
+      context "when the credential is not restricted" do
+        let(:credential) { create(:credential, server: server) }
+
+        it "ignores entries that have no domain" do
+          expect(authorizer.authorize(from: "Smith, Alice <alice@#{domain.name}>", sender: nil)).to eq [domain, nil]
+        end
+      end
+
+      it "rejects an allowed address on a domain the server can't send from" do
+        credential.update!(allowed_senders_text: "alice@unverified.example")
+        expect(authorizer.authorize(from: "alice@unverified.example", sender: nil)).to eq [nil, :unauthenticated_domain]
+      end
+
+      it "reports an unauthenticated domain when the address is neither allowed nor authenticated" do
+        expect(authorizer.authorize(from: "eve@unverified.example", sender: nil)).to eq [nil, :unauthenticated_domain]
+      end
+
+      context "when the server has a domain that can be used for any address" do
+        let!(:domain) { create(:domain, owner: server, use_for_any: true) }
+
+        it "still only accepts allowed addresses" do
+          expect(authorizer.authorize(from: "alice@#{domain.name}", sender: nil)).to eq [domain, nil]
+          expect(authorizer.authorize(from: "bob@elsewhere.example", sender: nil)).to eq [nil, :sender_not_permitted]
+        end
+      end
+
+      context "when the server is allowed to use the sender header" do
+        let(:server) { create(:server, allow_sender: true) }
+
+        it "accepts a message whose Sender is allowed" do
+          result = authorizer.authorize(from: "bob@#{domain.name}", sender: "alice@#{domain.name}")
+          expect(result).to eq [domain, nil]
+        end
+
+        it "rejects a message where neither From nor Sender is allowed" do
+          result = authorizer.authorize(from: "bob@#{domain.name}", sender: "carol@#{domain.name}")
+          expect(result).to eq [nil, :sender_not_permitted]
+        end
+      end
+
+      context "when the server is not allowed to use the sender header" do
+        it "ignores an allowed Sender" do
+          result = authorizer.authorize(from: "bob@#{domain.name}", sender: "alice@#{domain.name}")
+          expect(result).to eq [nil, :sender_not_permitted]
+        end
+      end
+    end
+
     context "when no credential is given" do
       subject(:authorizer) { described_class.new(server: server) }
 

@@ -27,6 +27,8 @@ en:
         permalink: Short name
       server:
         permalink: Short name
+      credential:
+        allowed_senders_text: Allowed senders
       domain:
         verification_method: Verify Method
       http_endpoint:

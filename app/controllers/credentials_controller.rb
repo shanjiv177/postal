@@ -16,7 +16,7 @@ class CredentialsController < ApplicationController
   end
 
   def create
-    @credential = @server.credentials.build(params.require(:credential).permit(:type, :name, :key, :hold))
+    @credential = @server.credentials.build(params.require(:credential).permit(:type, :name, :key, :hold, :allowed_senders_text))
     if @credential.save
       redirect_to_with_json [organization, @server, :credentials]
     else
@@ -25,7 +25,7 @@ class CredentialsController < ApplicationController
   end
 
   def update
-    if @credential.update(params.require(:credential).permit(:name, :key, :hold))
+    if @credential.update(params.require(:credential).permit(:name, :key, :hold, :allowed_senders_text))
       redirect_to_with_json [organization, @server, :credentials]
     else
       render_form_errors "edit", @credential

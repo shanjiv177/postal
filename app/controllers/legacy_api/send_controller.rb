@@ -11,6 +11,7 @@ module LegacyAPI
       "TooManyBCCAddresses" => "The maximum number of BCC addresses has been reached (maximum 50)",
       "FromAddressMissing" => "The From address is missing and is required",
       "UnauthenticatedFromAddress" => "The From address is not authorised to send mail from this server",
+      "SenderNotPermittedForCredential" => "The From address is not permitted for this credential",
       "AttachmentMissingName" => "An attachment is missing a name",
       "AttachmentMissingData" => "An attachment is missing data"
     }.freeze
@@ -103,11 +104,14 @@ module LegacyAPI
       # each, which would let an earlier From header go unchecked.
       header_block = raw_message.split(/\r?\n\r?\n/, 2).first.to_s
       authorizer = SenderAuthorizer.new(server: @current_credential.server, credential: @current_credential)
-      authenticated_domain, = authorizer.authorize(from: header_values(header_block, "from"),
-                                                   sender: header_values(header_block, "sender"))
+      authenticated_domain, reason = authorizer.authorize(from: header_values(header_block, "from"),
+                                                          sender: header_values(header_block, "sender"))
 
       # If we're not authenticated, don't continue
-      if authenticated_domain.nil?
+      if reason == :sender_not_permitted
+        render_error "SenderNotPermittedForCredential", message: ERROR_MESSAGES["SenderNotPermittedForCredential"]
+        return
+      elsif authenticated_domain.nil?
         render_error "UnauthenticatedFromAddress"
         return
       end
