@@ -205,6 +205,27 @@ describe SenderAuthorizer do
         expect(result).to eq [nil, :sender_not_permitted]
       end
 
+      it "rejects a From header with extra entries that have no domain" do
+        [
+          "alice@#{domain.name}, =?UTF-8?B?Y2VvQGJhbmsuY29t?=",
+          "Smith, Alice <alice@#{domain.name}>",
+        ].each do |from|
+          expect(authorizer.authorize(from: from, sender: nil)).to eq([nil, :unauthenticated_domain]), from
+        end
+      end
+
+      it "still accepts a single allowed address with an unusual display name" do
+        expect(authorizer.authorize(from: "Alice [Support] <alice@#{domain.name}>", sender: nil)).to eq [domain, nil]
+      end
+
+      context "when the credential is not restricted" do
+        let(:credential) { create(:credential, server: server) }
+
+        it "ignores entries that have no domain" do
+          expect(authorizer.authorize(from: "Smith, Alice <alice@#{domain.name}>", sender: nil)).to eq [domain, nil]
+        end
+      end
+
       it "rejects an allowed address on a domain the server can't send from" do
         credential.update!(allowed_senders_text: "alice@unverified.example")
         expect(authorizer.authorize(from: "alice@unverified.example", sender: nil)).to eq [nil, :unauthenticated_domain]
