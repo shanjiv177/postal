@@ -33,8 +33,10 @@ class OutgoingMessagePrototype
 
   attr_reader :message_id
 
+  # The envelope sender for the message. `from` may contain several
+  # addresses, so use the first one rather than the whole value.
   def from_address
-    Postal::Helpers.strip_name_from_address(@from)
+    SenderAuthorizer.addresses_in(@from).first || Postal::Helpers.strip_name_from_address(@from)
   end
 
   def sender_address
@@ -49,10 +51,7 @@ class OutgoingMessagePrototype
   end
 
   def find_domain
-    domain = @server.authenticated_domain_for_address(@from)
-    if @server.allow_sender? && domain.nil?
-      domain = @server.authenticated_domain_for_address(@sender)
-    end
+    domain, = SenderAuthorizer.new(server: @server, credential: credential).authorize(from: @from, sender: @sender)
     domain || :none
   end
 

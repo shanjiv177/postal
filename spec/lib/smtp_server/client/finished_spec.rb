@@ -81,6 +81,61 @@ module SMTPServer
         end
       end
 
+      context "when authorising the sender of an outgoing email" do
+        let!(:domain) { create(:domain, owner: server) }
+
+        def send_message_with_headers(*headers)
+          client.handle("DATA")
+          client.handle("Subject: Test")
+          headers.each { |header| client.handle(header) }
+          client.handle("To: #{rcpt_to}")
+          client.handle("")
+          client.handle("This is a test message")
+          client.handle("\r")
+          client.handle(".\r")
+        end
+
+        context "when the From address is not authenticated but the Sender address is" do
+          context "when the server allows the Sender header" do
+            let(:server) { create(:server, allow_sender: true) }
+
+            it "accepts the message" do
+              result = send_message_with_headers("From: someone@unverified.example", "Sender: test@#{domain.name}")
+              expect(result).to eq "250 OK"
+            end
+          end
+
+          context "when the server does not allow the Sender header" do
+            it "rejects the message" do
+              result = send_message_with_headers("From: someone@unverified.example", "Sender: test@#{domain.name}")
+              expect(result).to eq "530 From/Sender name is not valid"
+            end
+          end
+        end
+
+        context "when the server has a domain that can be used for any address" do
+          let!(:domain) { create(:domain, owner: server, use_for_any: true) }
+
+          it "accepts a From address on any domain" do
+            result = send_message_with_headers("From: someone@unverified.example")
+            expect(result).to eq "250 OK"
+          end
+        end
+
+        context "when the From header has several addresses and one is not authenticated" do
+          it "rejects the message" do
+            result = send_message_with_headers("From: Eve <someone@unverified.example>, Me <test@#{domain.name}>")
+            expect(result).to eq "530 From/Sender name is not valid"
+          end
+        end
+
+        context "when there is no From header" do
+          it "rejects the message" do
+            expect(send_message_with_headers).to eq "530 From/Sender name is not valid"
+          end
+        end
+      end
+
       context "when sending an outgoing email" do
         let(:domain) { create(:domain, owner: server) }
         let(:mail_from) { "test@#{domain.name}" }

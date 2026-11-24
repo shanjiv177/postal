@@ -163,6 +163,117 @@ RSpec.describe "Legacy Send API", type: :request do
           end
         end
       end
+
+      context "when the From address is not authenticated" do
+        let(:data) do
+          mail = Mail.new
+          mail.to = "test1@example.com"
+          mail.from = "someone@unverified.example"
+          mail.subject = "test"
+          mail.body = "plain text"
+          mail
+        end
+
+        it "returns an error" do
+          parsed_body = JSON.parse(response.body)
+          expect(parsed_body["status"]).to eq "error"
+          expect(parsed_body["data"]["code"]).to eq "UnauthenticatedFromAddress"
+        end
+
+        context "when the From header also has an authenticated address" do
+          let(:data) do
+            mail = Mail.new
+            mail.to = "test1@example.com"
+            mail["From"] = "Eve <someone@unverified.example>, Me <test@#{domain.name}>"
+            mail.subject = "test"
+            mail.body = "plain text"
+            mail
+          end
+
+          it "returns an error" do
+            parsed_body = JSON.parse(response.body)
+            expect(parsed_body["data"]["code"]).to eq "UnauthenticatedFromAddress"
+          end
+        end
+
+        context "when there is a second From header with an authenticated address" do
+          let(:data) do
+            "From: someone@unverified.example\r\n" \
+              "From: test@#{domain.name}\r\n" \
+              "To: test1@example.com\r\n" \
+              "Subject: test\r\n" \
+              "\r\n" \
+              "plain text\r\n"
+          end
+
+          it "returns an error" do
+            parsed_body = JSON.parse(response.body)
+            expect(parsed_body["data"]["code"]).to eq "UnauthenticatedFromAddress"
+          end
+        end
+
+        context "when the From header is folded over several lines" do
+          let(:data) do
+            "From: Me <test@#{domain.name}>,\r\n  " \
+              "Eve <someone@unverified.example>\r\n" \
+              "To: test1@example.com\r\n" \
+              "Subject: test\r\n" \
+              "\r\n" \
+              "plain text\r\n"
+          end
+
+          it "checks the folded addresses too" do
+            parsed_body = JSON.parse(response.body)
+            expect(parsed_body["data"]["code"]).to eq "UnauthenticatedFromAddress"
+          end
+        end
+
+        context "when the message uses bare LF line endings" do
+          let(:data) do
+            "From: someone@unverified.example\n" \
+              "To: test1@example.com\n" \
+              "Subject: test\n" \
+              "\n" \
+              "From: test@#{domain.name}\n"
+          end
+
+          it "does not read headers from the body" do
+            parsed_body = JSON.parse(response.body)
+            expect(parsed_body["data"]["code"]).to eq "UnauthenticatedFromAddress"
+          end
+        end
+
+        context "when the Sender address is authenticated" do
+          let(:data) do
+            mail = Mail.new
+            mail.to = "test1@example.com"
+            mail.from = "someone@unverified.example"
+            mail.sender = "test@#{domain.name}"
+            mail.subject = "test"
+            mail.body = "plain text"
+            mail
+          end
+
+          context "when the server allows the Sender header" do
+            let(:server) { create(:server, allow_sender: true) }
+
+            it "returns success" do
+              parsed_body = JSON.parse(response.body)
+              expect(parsed_body["status"]).to eq "success"
+              message = server.message(parsed_body["data"]["messages"]["test1@example.com"]["id"])
+              expect(message.domain_id).to eq domain.id
+            end
+          end
+
+          context "when the server does not allow the Sender header" do
+            it "returns an error" do
+              parsed_body = JSON.parse(response.body)
+              expect(parsed_body["status"]).to eq "error"
+              expect(parsed_body["data"]["code"]).to eq "UnauthenticatedFromAddress"
+            end
+          end
+        end
+      end
     end
   end
 end

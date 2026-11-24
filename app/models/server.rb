@@ -248,24 +248,6 @@ class Server < ApplicationRecord
     nil
   end
 
-  def find_authenticated_domain_from_headers(headers)
-    header_to_check = ["from"]
-    header_to_check << "sender" if allow_sender?
-    header_to_check.each do |header_name|
-      if headers[header_name].is_a?(Array)
-        values = headers[header_name]
-      else
-        values = [headers[header_name].to_s]
-      end
-
-      authenticated_domains = values.map { |v| authenticated_domain_for_address(v) }.compact
-      if authenticated_domains.size == values.size
-        return authenticated_domains.first
-      end
-    end
-    nil
-  end
-
   def suspend(reason)
     self.suspended_at = Time.now
     self.suspension_reason = reason

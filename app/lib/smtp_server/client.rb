@@ -478,7 +478,8 @@ module SMTPServer
 
       authenticated_domain = nil
       if @credential
-        authenticated_domain = @credential.server.find_authenticated_domain_from_headers(@headers)
+        authorizer = SenderAuthorizer.new(server: @credential.server, credential: @credential)
+        authenticated_domain, = authorizer.authorize(from: @headers["from"], sender: @headers["sender"])
         if authenticated_domain.nil?
           transaction_reset
           @state = :welcomed
